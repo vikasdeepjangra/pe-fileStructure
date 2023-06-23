@@ -1,0 +1,16 @@
+[
+    {
+        "name": "Assets",
+        "type": "folder",
+        "files": [
+            {
+                "name": "sample1.img",
+                "type": "file"
+            }
+        ]
+    },
+    {
+        "name": "fileCPP.cpp",
+        "type": "file"
+    }
+]
