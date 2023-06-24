@@ -1,16 +1,22 @@
 [
-    {
-        "name": "Assets",
+  {
+    "name": "projectId_exerciseId",
+    "type": "folder",
+    "files": [
+      {
+        "name": "src",
         "type": "folder",
         "files": [
-            {
-                "name": "sample1.img",
-                "type": "file"
-            }
+          {
+            "name": "projectId_exerciseId.cpp",
+            "type": "file"
+          }
         ]
-    },
-    {
-        "name": "fileCPP.cpp",
-        "type": "file"
-    }
+      }
+    ]
+  },
+  {
+    "name": "instruction.md",
+    "type": "file"
+  }
 ]
