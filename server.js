@@ -9,40 +9,26 @@ const fs = require("fs");
 const directoryPath = "PE_23Jun";
 const frontendPath = path.join(__dirname, "frontend");
 app.use(express.static(frontendPath));
-var directoryData = [];
 
-//FUNCTION
-async function fillDirectoryData() {
-  return new Promise((resolve, reject) => {
-    fs.readdir(directoryPath, (err, files) => {
-      if (err) {
-        reject(`Error reading directory: ${err}`);
-      }
-      let counter = files.length;
-      files.forEach((file) => {
-        const filePath = path.join(directoryPath, file);
+//FUNCTIONS
+function dirTree(directoryPath) {
+  var stats = fs.lstatSync(directoryPath),
+      info = {
+          name: path.basename(directoryPath)
+      };
 
-        fs.stat(filePath, (err, stats) => {
-          if (err) {
-            reject(`Error getting stats for file ${filePath}: ${err}`);
-          }
-
-          const isFolder = !stats.isFile();
-          directoryData.push({
-            name: file,
-            type: isFolder ? "true" : "false",
-            ...(isFolder && { files: [] }),
-          });
-
-          counter--;
-          if (counter === 0) {
-            resolve("Success");
-          }
-
+  if (stats.isDirectory() ) {
+      info.type = "folder";
+      if((path.basename(directoryPath) == directoryPath || path.basename(directoryPath) == 'src')){
+        info.files = fs.readdirSync(directoryPath).map(function(child) {
+            return dirTree(directoryPath + '/' + child);
         });
-      });
-    });
-  });
+      }
+  } else {
+      info.type = "file";
+  }
+
+  return info;
 }
 
 // APIs //
@@ -51,12 +37,10 @@ app.get("/", (req, res) => {
   res.send("success");
 });
 
-app.get("/ListOfFiles", async (req, res) => {
+app.get("/ListOfFiles", (req, res) => {
   try {
-    directoryData = [];
-    var result = await fillDirectoryData();
-    console.log(directoryData)
-    res.send(directoryData)
+    var x = dirTree(directoryPath);
+    res.send(x)
   } catch (error) {
     console.error(error);
     res.send(`Internal server error: ${error}`);
