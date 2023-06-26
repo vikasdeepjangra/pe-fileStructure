@@ -10,9 +10,6 @@ const directoryPath = "PE_23Jun";
 const frontendPath = path.join(__dirname, "frontend");
 app.use(express.static(frontendPath));
 
-/*
-4. fs/promise (use async fns) */
-
 //FUNCTIONS
 async function getDirectoryDetails(directoryPath) {
   return new Promise((resolve, reject) => {
