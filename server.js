@@ -10,25 +10,53 @@ const directoryPath = "PE_23Jun";
 const frontendPath = path.join(__dirname, "frontend");
 app.use(express.static(frontendPath));
 
+/*
+4. fs/promise (use async fns) */
+
 //FUNCTIONS
-function dirTree(directoryPath) {
-  var stats = fs.lstatSync(directoryPath),
-      info = {
-          name: path.basename(directoryPath)
+async function getDirectoryDetails(directoryPath) {
+  return new Promise((resolve, reject) => {
+    fs.lstat(directoryPath, (err, stats) => {
+
+      if (err) {
+        reject(`Error getting stats for file ${directoryPath}: ${err}`);
+        return;
+      }
+
+      const info = {
+        name: path.basename(directoryPath)
       };
 
-  if (stats.isDirectory() ) {
-      info.type = "folder";
-      if((path.basename(directoryPath) == directoryPath || path.basename(directoryPath) == 'src')){
-        info.files = fs.readdirSync(directoryPath).map(function(child) {
-            return dirTree(directoryPath + '/' + child);
-        });
-      }
-  } else {
-      info.type = "file";
-  }
+      if (stats.isDirectory()) {
+        info.type = "folder";
+        if ((path.basename(directoryPath) == directoryPath || path.basename(directoryPath) == 'src')) {
 
-  return info;
+          fs.readdir(directoryPath, async (err, files) => {
+            if (err) {
+              reject(`Error reading directory ${directoryPath}: ${err}`);
+              return;
+            }
+
+            const promises = files.map(async (child) => {
+              const childPath = path.join(directoryPath, child);
+              const childInfo = await getDirectoryDetails(childPath);
+              return childInfo;
+            });
+
+            Promise.all(promises).then((childInfos) => {
+              info.files = childInfos;
+              resolve(info);
+            }, reject);
+          });
+        } else {
+          resolve(info);
+        }
+      } else {
+        info.type = "file";
+        resolve(info);
+      }
+    });
+  });
 }
 
 // APIs //
@@ -37,10 +65,10 @@ app.get("/", (req, res) => {
   res.send("success");
 });
 
-app.get("/ListOfFiles", (req, res) => {
+app.get("/directoryDetails", async (req, res) => {
   try {
-    var x = dirTree(directoryPath);
-    res.send(x)
+    let directoryDetailsRes = await getDirectoryDetails(directoryPath);
+    res.send(directoryDetailsRes);
   } catch (error) {
     console.error(error);
     res.send(`Internal server error: ${error}`);
