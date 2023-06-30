@@ -1,12 +1,9 @@
 //IMPORTS
 const express = require("express");
 const app = express();
-const http = require("http");
 const path = require("path");
 const fs = require('fs/promises');
-const { spawn, exec } = require('child_process');
-const { error } = require("console");
-
+const { spawn } = require('child_process');
 
 //FRONTEND RUNNER
 const frontendPath = path.join(__dirname, "frontend");
