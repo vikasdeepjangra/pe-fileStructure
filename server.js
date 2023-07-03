@@ -3,7 +3,7 @@ const express = require("express");
 const app = express();
 const path = require("path");
 const fs = require('fs/promises');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 
 //FRONTEND RUNNER
 const frontendPath = path.join(__dirname, "frontend");
@@ -48,54 +48,9 @@ async function getDirectoryDetails(directoryPath) {
   }
 }
 
-// APIs //
-app.get("/", (req, res) => {
-  app.use(express.static(frontendPath));
-  res.send("success");
-});
-
-app.get("/unzipTar", (req, res) => {
-  const args = [directoryPath, tempFolderPath];
-  const childProcess = spawn(bashPath, [unzipscriptPath, ...args]);
-
-  const responseData = [];
-  let errorData = '';
-
-  childProcess.stdout.on('data', (data) => {
-    const trimmedData = data.toString().trim();
-    responseData.push(trimmedData);
-  });
-
-  childProcess.stderr.on('data', (data) => {
-    errorData += data.toString();
-  });
-
-  childProcess.on('close', (code) => {
-    if (code === 0) {
-      const response = responseData.join('\n');
-      res.send(response);
-    } else {
-      console.error(`child process exited with code ${code}`);
-      console.error(`child process stderr:\n${errorData}`);
-      res.status(500).send(`Internal server error: ${errorData}`);
-    }
-  });
-});
-
-app.get("/directoryDetails", async (req, res) => {
-  try {
-    const directoryPath = path.join("tempFolder", projectName);
-    let directoryDetailsRes = await getDirectoryDetails(directoryPath);
-    res.send(directoryDetailsRes);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send(`Internal server error: ${error}`);
-  }
-});
-
-app.get("/deleteUnzippedtar", async (req, res) => {
-    const args = [tempFolderPath, projectName];
-    const childProcess = spawn(bashPath, [deletescriptPath, ...args]);
+async function unzipTarFunction(...args){
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn(bashPath, [unzipscriptPath, ...args]);
 
     const responseData = [];
     let errorData = '';
@@ -112,14 +67,69 @@ app.get("/deleteUnzippedtar", async (req, res) => {
     childProcess.on('close', (code) => {
       if (code === 0) {
         const response = responseData.join('\n');
-        res.send(response);
+        resolve(response);
       } else {
-        console.error(`child process exited with code: ${code}`);
+        console.error(`child process exited with code ${code}`);
         console.error(`child process stderr:\n${errorData}`);
-        res.status(500).send(`An error occurred: ${errorData}`);
+        reject(`Internal server error: ${errorData}`);
       }
     });
-})
+  });
+}
 
+async function deleteUnzipped(...deleteArgs){
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn(bashPath, [deletescriptPath, ...deleteArgs]);
+    const responseData = [];
+      let errorData = '';
 
+      childProcess.stdout.on('data', (data) => {
+        const trimmedData = data.toString().trim();
+        responseData.push(trimmedData);
+      });
+
+      childProcess.stderr.on('data', (data) => {
+        errorData += data.toString();
+      });
+
+      childProcess.on('close', (code) => {
+        if (code === 0) {
+          const response = responseData.join('\n');
+          resolve(response);
+        } else {
+          console.error(`child process exited with code: ${code}`);
+          console.error(`child process stderr:\n${errorData}`);
+          reject(`An error occurred: ${errorData}`);
+        }
+      });
+  })
+}
+
+//APIs
+app.get("/getDirectoryDetailsAll", async (req, res) => {
+  try {
+    const args = [directoryPath, tempFolderPath];
+    // Await unzip process completion
+    const unzipRes = await unzipTarFunction(...args);
+    
+    // Get directory details
+    const directoryPathToGetDetails = path.join("tempFolder", projectName);
+    const directoryDetails = await getDirectoryDetails(directoryPathToGetDetails);
+
+    // Delete Temp Folder
+    const deleteArgs = [tempFolderPath, projectName];
+    const deleteUnzippedRes = await deleteUnzipped(...deleteArgs);
+
+    res.send(directoryDetails);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(`Internal server error: ${error}`);
+  }
+});
+
+//Frontend
+app.get("/", (req, res) => {
+  app.use(express.static(frontendPath));
+  res.send("success");
+});
 app.listen(3000);
