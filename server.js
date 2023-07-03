@@ -19,6 +19,35 @@ const tempFolderPath = 'tempFolder';
 const deletescriptPath = path.join(__dirname, '/shell-scripts/delete-unzipped.sh');
 
 //FUNCTIONS
+async function unzipTarFunction(...args){
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn(bashPath, [unzipscriptPath, ...args]);
+
+    const responseData = [];
+    let errorData = '';
+
+    childProcess.stdout.on('data', (data) => {
+      const trimmedData = data.toString().trim();
+      responseData.push(trimmedData);
+    });
+
+    childProcess.stderr.on('data', (data) => {
+      errorData += data.toString();
+    });
+
+    childProcess.on('close', (code) => {
+      if (code === 0) {
+        const response = responseData.join('\n');
+        resolve(response);
+      } else {
+        console.error(`child process exited with code ${code}`);
+        console.error(`child process stderr:\n${errorData}`);
+        reject(`Internal server error: ${errorData}`);
+      }
+    });
+  });
+}
+
 async function getDirectoryDetails(directoryPath) {
   try {
     const stats = await fs.lstat(directoryPath);
@@ -84,7 +113,7 @@ async function deleteUnzipped(...deleteArgs){
       let errorData = '';
 
       childProcess.stdout.on('data', (data) => {
-        const trimmedData = data.toString().trim();
+        const trimmedData = data.toString().trim() + '\n';
         responseData.push(trimmedData);
       });
 
@@ -108,9 +137,10 @@ async function deleteUnzipped(...deleteArgs){
 //APIs
 app.get("/getDirectoryDetailsAll", async (req, res) => {
   try {
-    const args = [directoryPath, tempFolderPath];
     // Await unzip process completion
+    const args = [directoryPath, tempFolderPath];
     const unzipRes = await unzipTarFunction(...args);
+    console.log(JSON.stringify(unzipRes.toString()) + '\n');
     
     // Get directory details
     const directoryPathToGetDetails = path.join("tempFolder", projectName);
@@ -119,6 +149,7 @@ app.get("/getDirectoryDetailsAll", async (req, res) => {
     // Delete Temp Folder
     const deleteArgs = [tempFolderPath, projectName];
     const deleteUnzippedRes = await deleteUnzipped(...deleteArgs);
+    console.log(JSON.stringify(deleteUnzippedRes.toString()));
 
     res.send(directoryDetails);
   } catch (error) {
@@ -132,4 +163,5 @@ app.get("/", (req, res) => {
   app.use(express.static(frontendPath));
   res.send("success");
 });
+
 app.listen(3000);
