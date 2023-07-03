@@ -3,7 +3,7 @@ const express = require("express");
 const app = express();
 const path = require("path");
 const fs = require('fs/promises');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 
 //FRONTEND RUNNER
 const frontendPath = path.join(__dirname, "frontend");
@@ -77,6 +77,35 @@ async function getDirectoryDetails(directoryPath) {
   }
 }
 
+async function unzipTarFunction(...args){
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn(bashPath, [unzipscriptPath, ...args]);
+
+    const responseData = [];
+    let errorData = '';
+
+    childProcess.stdout.on('data', (data) => {
+      const trimmedData = data.toString().trim();
+      responseData.push(trimmedData);
+    });
+
+    childProcess.stderr.on('data', (data) => {
+      errorData += data.toString();
+    });
+
+    childProcess.on('close', (code) => {
+      if (code === 0) {
+        const response = responseData.join('\n');
+        resolve(response);
+      } else {
+        console.error(`child process exited with code ${code}`);
+        console.error(`child process stderr:\n${errorData}`);
+        reject(`Internal server error: ${errorData}`);
+      }
+    });
+  });
+}
+
 async function deleteUnzipped(...deleteArgs){
   return new Promise((resolve, reject) => {
     const childProcess = spawn(bashPath, [deletescriptPath, ...deleteArgs]);
@@ -134,15 +163,5 @@ app.get("/", (req, res) => {
   app.use(express.static(frontendPath));
   res.send("success");
 });
+
 app.listen(3000);
-
-/* 
-
-problemID and projectName form Frontend.
-  1. Frontend should be sending problem and project id/name in req body. (get req - req body won't work only query or path).
-    
-  handle error 
-    maybe problem id is not there.
-    maybe Project name .js .cpp doesn't exist.
-  
-*/
