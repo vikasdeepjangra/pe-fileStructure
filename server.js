@@ -3,7 +3,7 @@ const express = require("express");
 const app = express();
 const path = require("path");
 const fs = require('fs/promises');
-const { spawn, execFile } = require('child_process');
+const { spawn } = require('child_process');
 
 //FRONTEND RUNNER
 const frontendPath = path.join(__dirname, "frontend");
@@ -19,35 +19,6 @@ const tempFolderPath = 'tempFolder';
 const deletescriptPath = path.join(__dirname, '/shell-scripts/delete-unzipped.sh');
 
 //FUNCTIONS
-async function getDirectoryDetails(directoryPath) {
-  try {
-    const stats = await fs.lstat(directoryPath);
-    const info = {
-      name: path.basename(directoryPath)
-    };
-
-    if (stats.isDirectory()) {
-      info.type = "folder";
-      if (info.name === projectName || info.name === 'src') {
-        const files = await fs.readdir(directoryPath);
-        const childPromises = files.map(async (child) => {
-          const childPath = path.join(directoryPath, child);
-          const childInfo = await getDirectoryDetails(childPath);
-          return childInfo;
-        });
-        const childInfos = await Promise.all(childPromises);
-        info.files = childInfos;
-      }
-    } else {
-      info.type = "file";
-    }
-
-    return info;
-  } catch (err) {
-    throw new Error(`Error getting details for directory ${directoryPath}: ${err}`);
-  }
-}
-
 async function unzipTarFunction(...args){
   return new Promise((resolve, reject) => {
     const childProcess = spawn(bashPath, [unzipscriptPath, ...args]);
@@ -77,6 +48,35 @@ async function unzipTarFunction(...args){
   });
 }
 
+async function getDirectoryDetails(directoryPath) {
+  try {
+    const stats = await fs.lstat(directoryPath);
+    const info = {
+      name: path.basename(directoryPath)
+    };
+
+    if (stats.isDirectory()) {
+      info.type = "folder";
+      if (info.name === projectName || info.name === 'src') {
+        const files = await fs.readdir(directoryPath);
+        const childPromises = files.map(async (child) => {
+          const childPath = path.join(directoryPath, child);
+          const childInfo = await getDirectoryDetails(childPath);
+          return childInfo;
+        });
+        const childInfos = await Promise.all(childPromises);
+        info.files = childInfos;
+      }
+    } else {
+      info.type = "file";
+    }
+
+    return info;
+  } catch (err) {
+    throw new Error(`Error getting details for directory ${directoryPath}: ${err}`);
+  }
+}
+
 async function deleteUnzipped(...deleteArgs){
   return new Promise((resolve, reject) => {
     const childProcess = spawn(bashPath, [deletescriptPath, ...deleteArgs]);
@@ -84,7 +84,7 @@ async function deleteUnzipped(...deleteArgs){
       let errorData = '';
 
       childProcess.stdout.on('data', (data) => {
-        const trimmedData = data.toString().trim();
+        const trimmedData = data.toString().trim() + '\n';
         responseData.push(trimmedData);
       });
 
@@ -108,9 +108,10 @@ async function deleteUnzipped(...deleteArgs){
 //APIs
 app.get("/getDirectoryDetailsAll", async (req, res) => {
   try {
-    const args = [directoryPath, tempFolderPath];
     // Await unzip process completion
+    const args = [directoryPath, tempFolderPath];
     const unzipRes = await unzipTarFunction(...args);
+    console.log(JSON.stringify(unzipRes.toString()) + '\n');
     
     // Get directory details
     const directoryPathToGetDetails = path.join("tempFolder", projectName);
@@ -119,6 +120,7 @@ app.get("/getDirectoryDetailsAll", async (req, res) => {
     // Delete Temp Folder
     const deleteArgs = [tempFolderPath, projectName];
     const deleteUnzippedRes = await deleteUnzipped(...deleteArgs);
+    console.log(JSON.stringify(deleteUnzippedRes.toString()));
 
     res.send(directoryDetails);
   } catch (error) {
@@ -133,3 +135,14 @@ app.get("/", (req, res) => {
   res.send("success");
 });
 app.listen(3000);
+
+/* 
+
+problemID and projectName form Frontend.
+  1. Frontend should be sending problem and project id/name in req body. (get req - req body won't work only query or path).
+    
+  handle error 
+    maybe problem id is not there.
+    maybe Project name .js .cpp doesn't exist.
+  
+*/
