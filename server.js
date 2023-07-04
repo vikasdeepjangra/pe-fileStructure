@@ -74,6 +74,35 @@ async function getDirectoryDetails(directoryPath, projectName) {
   }
 }
 
+async function unzipTarFunction(...args){
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn(bashPath, [unzipscriptPath, ...args]);
+
+    const responseData = [];
+    let errorData = '';
+
+    childProcess.stdout.on('data', (data) => {
+      const trimmedData = data.toString().trim();
+      responseData.push(trimmedData);
+    });
+
+    childProcess.stderr.on('data', (data) => {
+      errorData += data.toString();
+    });
+
+    childProcess.on('close', (code) => {
+      if (code === 0) {
+        const response = responseData.join('\n');
+        resolve(response);
+      } else {
+        console.error(`child process exited with code ${code}`);
+        console.error(`child process stderr:\n${errorData}`);
+        reject(`Internal server error: ${errorData}`);
+      }
+    });
+  });
+}
+
 async function deleteUnzipped(...deleteArgs){
   return new Promise((resolve, reject) => {
     const childProcess = spawn(bashPath, [deletescriptPath, ...deleteArgs]);
@@ -152,6 +181,7 @@ app.get("/", (req, res) => {
   app.use(express.static(frontendPath));
   res.send("success");
 });
+
 app.listen(3000);
 
 /* 
