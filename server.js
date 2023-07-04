@@ -4,15 +4,16 @@ const app = express();
 const path = require("path");
 const fs = require('fs/promises');
 const { spawn } = require('child_process');
+const bodyParser = require('body-parser');
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({extended: true}));
 
 //FRONTEND RUNNER
 const frontendPath = path.join(__dirname, "frontend");
 app.use(express.static(frontendPath));
 
-// CONSTANTS, VARIABLES //
-const projectID = "195e6896-14c6-11ee-be56-0242ac120002";
-const projectName = "PE_23Jun";
-const directoryPath = path.join('efs-mount-point/workspaces', projectID, projectName+'.tar');
+// CONSTANTS //
 const bashPath = 'C:/Program Files/Git/bin/bash.exe';
 const unzipscriptPath = 'shell-scripts/tar-unzip.sh';
 const tempFolderPath = 'tempFolder';
@@ -48,9 +49,9 @@ async function unzipTarFunction(...args){
   });
 }
 
-async function getDirectoryDetails(directoryPath) {
+async function getDirectoryDetails(directoryPath, projectName) {
   try {
-    const stats = await fs.lstat(directoryPath);
+    const stats = await fs.stat(directoryPath);
     const info = {
       name: path.basename(directoryPath)
     };
@@ -106,8 +107,11 @@ async function deleteUnzipped(...deleteArgs){
 }
 
 //APIs
-app.get("/getDirectoryDetailsAll", async (req, res) => {
+app.post("/getDirectoryDetailsAll", async (req, res) => {
   try {
+    const { projectID, projectName } = req.body;
+    const directoryPath = path.join('efs-mount-point/workspaces', projectID, projectName+'.tar');
+
     // Await unzip process completion
     const args = [directoryPath, tempFolderPath];
     const unzipRes = await unzipTarFunction(...args);
@@ -115,7 +119,7 @@ app.get("/getDirectoryDetailsAll", async (req, res) => {
     
     // Get directory details
     const directoryPathToGetDetails = path.join("tempFolder", projectName);
-    const directoryDetails = await getDirectoryDetails(directoryPathToGetDetails);
+    const directoryDetails = await getDirectoryDetails(directoryPathToGetDetails, projectName);
 
     // Delete Temp Folder
     const deleteArgs = [tempFolderPath, projectName];
@@ -124,7 +128,7 @@ app.get("/getDirectoryDetailsAll", async (req, res) => {
 
     res.send(directoryDetails);
   } catch (error) {
-    console.error(error);
+    console.error(error)
     res.status(500).send(`Internal server error: ${error}`);
   }
 });
@@ -137,12 +141,11 @@ app.get("/", (req, res) => {
 app.listen(3000);
 
 /* 
-
 problemID and projectName form Frontend.
-  1. Frontend should be sending problem and project id/name in req body. (get req - req body won't work only query or path).
+  Done - 1. Frontend should be sending problem and project id/name in req body. (get req - req body won't work - only query or path).
     
-  handle error 
-    maybe problem id is not there.
-    maybe Project name .js .cpp doesn't exist.
+  Pending - 2. handle error 
+                maybe problem id is not there.
+                maybe Project name .js .cpp doesn't exist.
   
 */
