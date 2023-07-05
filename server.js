@@ -14,6 +14,7 @@ const bashPath = 'C:/Program Files/Git/bin/bash.exe';
 const unzipscriptPath = 'shell-scripts/tar-unzip.sh';
 const tempFolderPath = 'tempFolder';
 const deletescriptPath = 'shell-scripts/delete-unzipped.sh';
+const addFileDirectoryScript = 'shell-scripts/add-file-directory.sh'
 
 //FUNCTIONS
 async function unzipTarFunction(...args){
@@ -140,6 +141,34 @@ async function problemIDExists(directoryPath) {
   }
 }
 
+async function addFolderToPath(directoryPathToAdd){
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn(bashPath, [addFileDirectoryScript, directoryPathToAdd]);
+    const responseData = [];
+      let errorData = '';
+
+      childProcess.stdout.on('data', (data) => {
+        const trimmedData = data.toString().trim() + '\n';
+        responseData.push(trimmedData);
+      });
+
+      childProcess.stderr.on('data', (data) => {
+        errorData += data.toString();
+      });
+
+      childProcess.on('close', (code) => {
+        if (code === 0) {
+          const response = responseData.join('\n');
+          resolve(response);
+        } else {
+          console.error(`child process exited with code: ${code}`);
+          console.error(`child process stderr:\n${errorData}`);
+          reject(`An error occurred: ${errorData}`);
+        }
+      });
+  })
+}
+
 //APIs
 app.post("/getDirectoryDetailsAll", async (req, res) => {
   try {
@@ -173,6 +202,43 @@ app.post("/getDirectoryDetailsAll", async (req, res) => {
   }
 });
 
+app.post("/addDirectoryOrFile", async (req, res) => {
+  try {
+    const { projectID, projectName, addType, addHerePath } = req.body;
+    let directoryPath = path.join('efs-mount-point/workspaces', projectID);
+    const problemIDExistsRes = await problemIDExists(directoryPath);
+
+    if(!problemIDExistsRes){
+      res.status(404).json({ message: "Problem ID Directory Doesn't Exist." });
+    } else{
+      directoryPath = path.join(directoryPath, projectName+'.tar');
+      // Await unzip process completion
+      const args = [directoryPath, tempFolderPath];
+      const unzipRes = await unzipTarFunction(...args);
+      console.log(JSON.stringify(unzipRes.toString()) + '\n');
+
+      // Add directory or file
+      const directoryPathToAdd = path.join("tempFolder", projectName, addHerePath);
+      console.log(directoryPathToAdd)
+      console.log('\n')
+      console.log('\n')
+      console.log('\n')
+    
+      if(addType == 'folder'){
+        const addFolderRes = await addFolderToPath(directoryPathToAdd);
+      }else {
+        console.log("File");
+      }
+
+      res.send("Success");
+    }
+  } catch (error) {
+    console.error(error)
+    res.status(500).send(`Internal server error: ${error}`);
+  }
+
+})
+
 //FRONTEND RUNNER
 const frontendPath = path.join(__dirname, "frontend");
 app.use(express.static(frontendPath));
@@ -183,12 +249,3 @@ app.get("/", (req, res) => {
 });
 
 app.listen(3000);
-
-/* 
-problemID and projectName form Frontend.
-  Done - 1. Frontend should be sending problem and project id/name in req body. (get req - req body won't work - only query or path).
-    
-  Pending - 2. handle error 
-    maybe problem id is not there.
-    maybe Project name .js .cpp doesn't exist.
-*/
