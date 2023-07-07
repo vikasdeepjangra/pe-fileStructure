@@ -14,7 +14,9 @@ const bashPath = 'C:/Program Files/Git/bin/bash.exe';
 const unzipscriptPath = 'shell-scripts/tar-unzip.sh';
 const tempFolderPath = 'tempFolder';
 const deletescriptPath = 'shell-scripts/delete-unzipped.sh';
-const addFileDirectoryScript = 'shell-scripts/add-file-directory.sh'
+const addFileDirectoryScript = 'shell-scripts/add-file-directory.sh';
+const deleteFileDirectoryScript = 'shell-scripts/delete-file-directory.sh';
+const putBackToEFSScript = 'shell-scripts/tar-back-to-efs.sh';
 
 //FUNCTIONS
 async function unzipTarFunction(...args){
@@ -54,8 +56,8 @@ async function getDirectoryDetails(directoryPath, projectName) {
     };
 
     if (stats.isDirectory()) {
-      info.type = "folder";
-      if (info.name === projectName || info.name === 'src') {
+      info.type = "directory";
+      // if (info.name === projectName || info.name === 'src') {  // - add this only do recursion on src.
         const files = await fs.readdir(directoryPath);
         const childPromises = files.map(async (child) => {
           const childPath = path.join(directoryPath, child);
@@ -64,7 +66,7 @@ async function getDirectoryDetails(directoryPath, projectName) {
         });
         const childInfos = await Promise.all(childPromises);
         info.files = childInfos;
-      }
+      // }
     } else {
       info.type = "file";
     }
@@ -141,9 +143,67 @@ async function problemIDExists(directoryPath) {
   }
 }
 
-async function addFolderToPath(directoryPathToAdd){
+async function addFolderOrFileToPath(directoryPathToAdd, type){
   return new Promise((resolve, reject) => {
-    const childProcess = spawn(bashPath, [addFileDirectoryScript, directoryPathToAdd]);
+      const childProcess = spawn(bashPath, [addFileDirectoryScript, directoryPathToAdd, type]);
+      const responseData = [];
+      let errorData = '';
+
+      childProcess.stdout.on('data', (data) => {
+        const trimmedData = data.toString().trim() + '\n';
+        responseData.push(trimmedData);
+      });
+
+      childProcess.stderr.on('data', (data) => {
+        errorData += data.toString();
+      });
+
+      childProcess.on('close', (code) => {
+        if (code === 0) {
+          const response = responseData.join('\n');
+          resolve(response);
+        } else {
+          console.error(`child process exited with code: ${code}`);
+          console.error(`child process stderr:\n${errorData}`);
+          reject(`An error occurred: ${errorData}`);
+        }
+      });
+  })
+}
+
+async function deleteFolderOrFileToPath(directoryPathToDelete, type){
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn(bashPath, [deleteFileDirectoryScript, directoryPathToDelete, type]);
+    const responseData = [];
+    let errorData = '';
+
+    childProcess.stdout.on('data', (data) => {
+      const trimmedData = data.toString().trim() + '\n';
+      responseData.push(trimmedData);
+    });
+
+    childProcess.stderr.on('data', (data) => {
+      errorData += data.toString();
+    });
+
+    childProcess.on('close', (code) => {
+      if (code === 0) {
+        const response = responseData.join('\n');
+        resolve(response);
+      } else {
+        console.error(`child process exited with code: ${code}`);
+        console.error(`child process stderr:\n${errorData}`);
+        reject(`An error occurred: ${errorData}`);
+      }
+    });
+  })
+}
+
+async function putTarToEFS(folderPath, efsPath, projectName){
+  return new Promise((resolve, reject) => {
+    const efsPathWithtarName = path.join(efsPath, projectName + ".tar.gz")
+
+    const childProcess = spawn(bashPath, [putBackToEFSScript, folderPath, efsPathWithtarName, projectName]);
     const responseData = [];
       let errorData = '';
 
@@ -172,18 +232,17 @@ async function addFolderToPath(directoryPathToAdd){
 //APIs
 app.post("/getDirectoryDetailsAll", async (req, res) => {
   try {
-    const { projectID, projectName } = req.body;
-    let directoryPath = path.join('efs-mount-point/workspaces', projectID);
+    const { projectId, projectName } = req.body;
+    const directoryPath = path.join('efs-mount-point/workspaces', projectId);
     const problemIDExistsRes = await problemIDExists(directoryPath);
 
     if(!problemIDExistsRes){
       res.status(404).json({ message: "Problem ID Directory Doesn't Exist." });
     } else{
-      directoryPath = path.join(directoryPath, projectName+'.tar');
+      const directoryPathToUnzip = path.join(directoryPath, projectName+'.tar.gz');
       // Await unzip process completion
-      const args = [directoryPath, tempFolderPath];
+      const args = [directoryPathToUnzip, tempFolderPath];
       const unzipRes = await unzipTarFunction(...args);
-      console.log(JSON.stringify(unzipRes.toString()) + '\n');
       
       // Get directory details
       const directoryPathToGetDetails = path.join("tempFolder", projectName);
@@ -192,7 +251,6 @@ app.post("/getDirectoryDetailsAll", async (req, res) => {
       // Delete Temp Folder
       const deleteArgs = [tempFolderPath, projectName];
       const deleteUnzippedRes = await deleteUnzipped(...deleteArgs);
-      console.log(JSON.stringify(deleteUnzippedRes.toString()));
 
       res.send(directoryDetails);
     }
@@ -204,39 +262,74 @@ app.post("/getDirectoryDetailsAll", async (req, res) => {
 
 app.post("/addDirectoryOrFile", async (req, res) => {
   try {
-    const { projectID, projectName, addType, addHerePath } = req.body;
-    let directoryPath = path.join('efs-mount-point/workspaces', projectID);
+    const { projectId, projectName, type, addPath } = req.body;
+    let directoryPath = path.join('efs-mount-point/workspaces', projectId);
     const problemIDExistsRes = await problemIDExists(directoryPath);
 
     if(!problemIDExistsRes){
       res.status(404).json({ message: "Problem ID Directory Doesn't Exist." });
     } else{
-      directoryPath = path.join(directoryPath, projectName+'.tar');
+      directoryPath = path.join(directoryPath, projectName+'.tar.gz');
+      
       // Await unzip process completion
       const args = [directoryPath, tempFolderPath];
       const unzipRes = await unzipTarFunction(...args);
-      console.log(JSON.stringify(unzipRes.toString()) + '\n');
 
-      // Add directory or file
-      const directoryPathToAdd = path.join("tempFolder", projectName, addHerePath);
-      console.log(directoryPathToAdd)
-      console.log('\n')
-      console.log('\n')
-      console.log('\n')
-    
-      if(addType == 'folder'){
-        const addFolderRes = await addFolderToPath(directoryPathToAdd);
-      }else {
-        console.log("File");
-      }
+      //Add directory or file
+      const directoryPathToAdd = path.join("tempFolder", projectName, addPath);    
+      const addFolderRes = await addFolderOrFileToPath(directoryPathToAdd, type); 
 
-      res.send("Success");
+      //Rezip and Send to EFS
+      const efsPath = path.join('efs-mount-point/workspaces', projectId);
+      const tarToEFS = await putTarToEFS(tempFolderPath, efsPath, projectName);
+
+      //Delete From Temp Folder
+      const deleteArgs = [tempFolderPath, projectName];
+      const deleteUnzippedRes = await deleteUnzipped(...deleteArgs);
+      
+      res.send({success: true});
     }
   } catch (error) {
     console.error(error)
     res.status(500).send(`Internal server error: ${error}`);
   }
 
+})
+
+app.post("/deleteDirectoryOrFile", async (req, res) => {
+  try {
+    const { projectId, projectName, type, deletePath } = req.body;
+
+    let directoryPath = path.join('efs-mount-point/workspaces', projectId);
+    const problemIDExistsRes = await problemIDExists(directoryPath);
+
+    if(!problemIDExistsRes){
+      res.status(404).json({ message: "Problem ID Directory Doesn't Exist." });
+    } else{
+      directoryPath = path.join(directoryPath, projectName+'.tar.gz');
+      
+      // Await unzip process completion
+      const args = [directoryPath, tempFolderPath];
+      const unzipRes = await unzipTarFunction(...args);
+
+      //Delete directory or file
+      const directoryPathToDelete = path.join("tempFolder", projectName, deletePath); 
+      const addFolderRes = await deleteFolderOrFileToPath(directoryPathToDelete, type);
+
+      //Rezip and Send to EFS
+      const efsPath = path.join('efs-mount-point/workspaces', projectId);
+      const tarToEFS = await putTarToEFS(tempFolderPath, efsPath, projectName);
+
+      //Delete From Temp Folder
+      const deleteArgs = [tempFolderPath, projectName];
+      const deleteUnzippedRes = await deleteUnzipped(...deleteArgs);
+      
+      res.send({success: true});
+    }
+  } catch (error) {
+    console.error(error)
+    res.status(500).send(`Internal server error: ${error}`);
+  }
 })
 
 //FRONTEND RUNNER

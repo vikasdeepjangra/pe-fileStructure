@@ -4,9 +4,9 @@ folderOrFilePath=$1
 addType=$2
 
 if [ "$addType" = "directory" ]; then
-  mkdir -p "$folderOrFilePath"
+  rmdir -p "$folderOrFilePath"
 elif [ "$addType" = "file" ]; then
-  touch "$folderOrFilePath"
+  rm "$folderOrFilePath"
 else
   echo "file type is not recognized"
 fi
