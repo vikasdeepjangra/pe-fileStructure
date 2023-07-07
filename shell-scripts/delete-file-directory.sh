@@ -4,7 +4,7 @@ folderOrFilePath=$1
 addType=$2
 
 if [ "$addType" = "directory" ]; then
-  rmdir -p "$folderOrFilePath"
+  rm -r "$folderOrFilePath"
 elif [ "$addType" = "file" ]; then
   rm "$folderOrFilePath"
 else
