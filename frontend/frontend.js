@@ -35,17 +35,15 @@ const fileToDeleteWithPath = {
 }
 
 async function getDirectoryDetailsAll(){
-  let getDirectoryDetails = await fetch("http://localhost:3000/getDirectoryDetailsAll", { 
-    method: 'POST',
+  let getDirectoryDetails = await fetch(`http://localhost:3000/directory-details?projectId=${projectId}&projectName=${projectName}`, { 
+    method: 'GET',
     headers: {
       'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(projectInfo),
+    }
   });
   let directoryDetailsData = await getDirectoryDetails.json();
   console.log(JSON.stringify(directoryDetailsData));
 }
-
 
 async function addDirectoryOrFile(){
   let addDirectoryFile = await fetch("http://localhost:3000/addDirectoryOrFile", {
@@ -63,13 +61,27 @@ async function addDirectoryOrFile(){
 }
 
 async function deleteDirectoryOrFile(){
-  console.log("From Frontend: ", fileToDeleteWithPath.deletePath)
   let deleteDirectoryFile = await fetch("http://localhost:3000/deleteDirectoryOrFile", {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(fileToDeleteWithPath)
+  }).catch(err =>{
+    console.log(err);
+  })
+
+  let deleteDirectoryFileRes = await deleteDirectoryFile.json();
+  console.log(JSON.stringify(deleteDirectoryFileRes));
+}
+
+async function deleteDirectoryOrFile(){
+  let deleteDirectoryFile = await fetch("http://localhost:3000/writeToFile", {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(fileToEditWithPath)
   }).catch(err =>{
     console.log(err);
   })
